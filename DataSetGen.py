@@ -15,6 +15,9 @@ def generate_uniform_dist(amount,num_pts,r) :
 		distributions.append(X)
 	return distributions
 
+
+
+#need to generate around common point
 def generate_rand_circs(amount,size) :
 	circs = []
 	for i in range(amount) :
@@ -49,6 +52,7 @@ def generate_rand_tori(amount,size) :
 	return tori
 
 
+
 def generate_norm_distributions(num_shapes,amount,size,shape) :
 	distributions = []
 	for i in range(amount) :
@@ -57,6 +61,7 @@ def generate_norm_distributions(num_shapes,amount,size,shape) :
 		#add circles to one data set
 		distributions.append(np.concatenate(shapes))
 	return distributions
+
 
 """
 distr = generate_norm_distributions(5,10,1000,generate_rand_tori)
