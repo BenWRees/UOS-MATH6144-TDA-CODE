@@ -3,22 +3,31 @@ import matplotlib.pyplot as plt
 import gudhi as gd
 import Methods
 from gudhi.representations import Landscape,Silhouette,PersistenceImage
+from gudhi.wasserstein import wasserstein_distance
 
 #
-def dgm_pts(dgm) :
+"""def dgm_pts(dgm) :
 	points = [] 
 	for i in dgm :
 		i_pts = []
 		for pts in i :
 			(p,q) = pts[1]
-			i_pts.append([p,q])
-		points.append(i_pts)
+			if (p == 'inf') : 
+				i_pts.append([np.inf,q])
+			elif (q=='inf') :
+				i_pts.append([p,np.inf])
+			else :
+				i_pts.append([p,q])
+	return points"""
+def dgm_pts(skeletons,dim) :
+	points = []
+	for skelly in skeletons :
+		points.append(skelly.persistence_intervals_in_dimension(dim))
 	return points
 
 
 #calculate distance matrix for collection of representations for the wasserstein metric of a certain distance
-def distance_matrix_wasserstein(persistences,ord) :
-	dgms = dgm_pts(persistences)
+def distance_matrix_wasserstein(dgms,ord) :
 	#loop over each diagram
 	dist_matrix = np.empty((len(dgms),len(dgms)), dtype=float )
 	for i in range(0,len(dgms)) :
@@ -26,12 +35,13 @@ def distance_matrix_wasserstein(persistences,ord) :
 			if i==j : 
 				dist_matrix[i,j] = 0
 			else :
-				dist_matrix[i,j] = gd.wasserstein.wasserstein_distance(dgms[i],dgms[j],order=ord)
+				#continue
+				dist_matrix[i,j] = wasserstein_distance(dgms[i],dgms[j],order=ord)
+
 	return dist_matrix
 
 #calculate distance matrix for collection of representations for the bottleneck distance
-def distance_matrix_bottleneck(persistences) :
-	dgm = dgm_pts(persistences)
+def distance_matrix_bottleneck(dgm) :
 	#loop over each diagram
 	dist_matrix = np.zeros((len(dgm),len(dgm)))
 	for i in range(0,len(dgm)) :
@@ -42,10 +52,13 @@ def distance_matrix_bottleneck(persistences) :
 				dist_matrix[i][j] = gd.bottleneck_distance(dgm[i],dgm[j])
 	return dist_matrix
 
-#generate 4 distributions
 
-distribution = Methods.generate_norm_distributions(2,2,10,Methods.generate_rand_circs)
+#wraps curves into appropriate form
+def wrap_curves(curves) :
+	pass
 
+
+distribution = Methods.generate_norm_distributions(2,4,10,Methods.generate_rand_circs)
 
 rips_complexes = Methods.Rips_complexes(distribution,10)
 zero_skeletons = Methods.skeletons(rips_complexes,1)
@@ -53,7 +66,7 @@ zero_persistences = Methods.persistences(zero_skeletons)
 one_skeletons = Methods.skeletons(rips_complexes,2)
 one_persistences = Methods.persistences(one_skeletons)
 
-print("persistence diagram: ",one_persistences)
 
-print("distance matrix: ", distance_matrix_bottleneck(one_persistences))
+#print(dgm_pts(one_skeletons,0))
 
+print(distance_matrix_wasserstein(dgm_pts(one_skeletons,0),2))
