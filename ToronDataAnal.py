@@ -26,11 +26,43 @@ toron_compl = gd.AlphaComplex(points = toron_pts)
 toron_skel = toron_compl.create_simplex_tree()
 toron_pers = toron_skel.persistence()
 
+#plot two filtration levels 
+toron_compl_res_a = gd.RipsComplex(points=toron_pts,max_length=6250).create_simplex_tree()
+toron_compl_res_b = gd.RipsComplex(points=toron_pts,max_length=6251).create_simplex_tree()
+toron_pers_a = toron_compl_res_a.persistence()
+toron_pers_b = toron_compl_res_b.persistence()
+
+a_x_coords = [a[1][0] for a in tuple(toron_pers_a)]
+a_y_coords = [a[1][1] for a in tuple(toron_pers_a)]
+
+b_x_coords = [a[1][0] for a in tuple(toron_pers_b)]
+b_y_coords = [a[1][1] for a in tuple(toron_pers_b)]
+
+plt.plot(a_x_coords,a_y_coords)
+plt.title("filtration of toron data set with filtration level 6250")
+plt.show()
+plt.plot(b_x_coords,b_y_coords)
+plt.title("filtration of toron data set with filtration level 6251")
+plt.show()
+
 gd.plot_persistence_diagram(toron_pers, legend=True)
 plt.show()
 
+x_coords = [a[0] for a in toron_skel.persistence_intervals_in_dimension(1)]
+y_coords = [a[1] for a in toron_skel.persistence_intervals_in_dimension(1)]
+persist = [[d-b,b,d] for b,d in zip(x_coords,y_coords)]
+max_persist = max([a[0] for a in persist])
+
+def find_coords(max,vals) :
+	for v in vals :
+		if v[0] == max :
+			return v
+		continue
+	return None
+
+coords = find_coords(max_persist,persist)
+print(coords)
 #get k-th landscapes over values of t in resolution
-landscape = Landscape(num_landscapes=2,resolution=100).fit_transform([toron_dgm])
 landscape_two = Landscape(num_landscapes=2,resolution=100).fit_transform([toron_skel.persistence_intervals_in_dimension(1)])
 
 plt.plot(landscape_two[0])
@@ -54,6 +86,7 @@ def lifespan_curve(dgm,resolution) :
 	t = np.linspace(0,max(dgm[:,1]),resolution)
 	lifespan_cv = []
 	for time in t :
+
 		lifespan_cv.append(lifespan_curve_val(dgm,time))
 	return np.array(lifespan_cv),t
 
@@ -63,11 +96,14 @@ plt.title('Persistence Lifespan Curve')
 plt.show()
 
 #Need to fix
-PI = gd.representations.PersistenceImage(bandwidth=1e-4, weight=lambda x: x[1]**2, im_range=[0,.004,0,.004], resolution=[100,100])
+PI = gd.representations.PersistenceImage(bandwidth=2, weight=lambda x: x[1]**2, im_range=[0,.004,0,.004], resolution=[100,100])
 pi = PI.fit_transform([toron_skel.persistence_intervals_in_dimension(1)])
 plt.imshow(np.reshape(pi[0], [100,100]))
 plt.title("Persistence Image")
 plt.show()
+
+"""gd.plot_persistence_diagram(toron_pers, legend=True)
+plt.show()"""
 
 #print(persistence_lifespan)
 

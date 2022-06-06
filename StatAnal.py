@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import gudhi as gd
 import Methods
 from gudhi.representations import Landscape,Silhouette,PersistenceImage
-
+from gudhi.wasserstein.barycenter import lagrangian_barycenter
 
 """
 	Function generates VR complexes for a user-chosen list of plots
@@ -48,14 +48,31 @@ def persistences(skeletons) :
 		persistences.append(i.persistence())
 	return persistences
 
-#Compute persistence Landscape mean
-def persistence_landscapes(skeletons,dim,k) :
+#Compute persistence Landscape 2d
+def persistence_landscapes_2d(skeletons,dim,k) :
 	landscapes = []
 	for i in skeletons :
 		l = Landscape(num_landscapes=k,resolution=10)
 		L = l.fit_transform([i.persistence_intervals_in_dimension(dim)])
 		#print(L)
 		landscapes.append(L)
+	return landscapes
+
+#Compute persistence Landscape in 3d 
+#returns list of tuples (k,t,lambda(k,t))
+def persistence_landscapes_3d(skeletons,dim,K) :
+	landscapes = []
+	for i in skeletons :
+		k_landscape = []
+		for k in range(1,K) :
+			#print("k value: ",k)
+			l = Landscape(num_landscapes=k,resolution=10)
+			L = l.fit_transform([i.persistence_intervals_in_dimension(dim)])[0]
+			ts = [a for a in range(len(L))]
+			values = [[k,t,l] for t,l in zip(ts,L)]
+			k_landscape = k_landscape + values
+			#print('landscape coords:', values )
+		landscapes.append(k_landscape)
 	return landscapes
 
 
@@ -84,26 +101,15 @@ def persistence_images(skeletons,dim,res,var=1) :
 def mean_persistence(representations) :
 	return (np.mean(representations,axis=0)[0])
 
-#Use frechet mean Algo 1 from Turner
-def frechet_mean(diagrams,dim) :
-	i = np.random.rand(0,len(diagrams))
-	Y = diagrams[i]
-	flag = False
-	while flag==False:
-		K = len(Y)
-		for i in range(0,i+1) :
-			(x_i,y_i) = gf
-		for j in range(1,K+1) :
-
-		if :
-			flag = True
-
-	return Y
+def frechet_mean(skeletons,dim) :
+	Methods.persistences(skeletons)
+	diagrams = [i.persistence_intervals_in_dimension(dim) for i in skeletons]
+	return lagrangian_barycenter(pdiagset=diagrams,init=None)
 
 	
 		
 
-distributions = Methods.generate_norm_distributions(5,10,100,Methods.generate_rand_circs)
+distributions = Methods.generate_norm_distributions(2,4,100,Methods.generate_rand_circs,2)
 
 """for i in distributions :
 	plt.scatter(i[:,0],i[:,1])
@@ -120,6 +126,8 @@ zero_persistences = persistences(zero_skeletons)
 #compute 1-dim PD using VR
 one_skeletons = skeletons(rips_complexes,2)
 one_persistences = persistences(one_skeletons)
+gd.plot_persistence_diagram(one_persistences[1])
+plt.show()
 
 """for i in zero_persistences :
 	gd.plot_persistence_diagram(i)
@@ -136,10 +144,15 @@ for i in one_persistences :
 #Statistical means of each vectorisation technique
 
 #calculate landscapes over t of lambda_k
-zero_landscapes = persistence_landscapes(zero_skeletons,0,3)
-one_landscapes = persistence_landscapes(one_skeletons,1,3)
+zero_landscapes = persistence_landscapes_2d(zero_skeletons,0,3)
+one_landscapes = persistence_landscapes_2d(one_skeletons,1,3)
+
+one_landscapes_3d = persistence_landscapes_3d(one_skeletons,1,6)[0]
 
 
+
+#plt.plot(x_cords,y_cords,z_cords)
+#plt.show()
 #print("true mean",true_mean)
 
 
@@ -154,15 +167,18 @@ for i in zero_landscapes[:5] :
 	plt.plot(i[0])
 plt.show()"""
 
-
-plt.plot(landscape_mean_one, '--', color="red")
-for i in one_landscapes[:5] :
-	plt.plot(i[0])
+print('landscape 2d vals: ',one_landscapes)
+plt.plot(landscape_mean_one, '--', color="red",label="mean Landscape")
+count = 0 
+for i in one_landscapes :
+	title = "Landscape " + str(count)
+	plt.plot(i[0],label=title)
+plt.legend()
 plt.show()
 
 
 
-
+"""
 #compute Silhouette mean
 one_silhouettes_low = persistence_silhouettes(one_skeletons,1,3,1)
 one_silhouettes_high = persistence_silhouettes(one_skeletons,1,3,200)
@@ -201,7 +217,7 @@ for i in persistence_images :
 def accuracy(observed) :
 	true = np.mean(true_mean)
 	return 100*(1-(np.absolute(true-observed)/true))
-
+"""
 #andscape_mean_acc = list(map(accuracy, landscape_mean))
 #silhouette_mean_high_acc = list(map(accuracy, silhouette_mean_high))
 #silhouette_mean_low_acc = list(map(accuracy, silhouette_mean_low))

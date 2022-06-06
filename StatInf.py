@@ -4,17 +4,10 @@ import gudhi as gd
 import Methods
 from gudhi.representations import Landscape,Silhouette,PersistenceImage, WassersteinDistance
 from gudhi.wasserstein import wasserstein_distance
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind #,permutation_test
+import csv
+from statsmodels.stats.multitest import multipletests
 
-
-distribution = Methods.generate_norm_distributions(4,4,100,Methods.generate_rand_tori)
-
-rips_complexes = Methods.Rips_complexes(distribution,10)
-alpha_complex = Methods.Alpha_complexes(distribution)
-zero_skeletons = Methods.skeletons(rips_complexes,1)
-zero_persistences = Methods.persistences(zero_skeletons)
-one_skeletons = Methods.skeletons(rips_complexes,2)
-one_persistences = Methods.persistences(one_skeletons)
 
 #takes n persistence diagrams and splits them into two sets n1 and n2
 def rand_labelling(diagrams) :
@@ -94,22 +87,22 @@ def unbiased_estimator(skeletons,dim,observed_labelling,repetitions,loss_func,p,
 	#print(diagrams)
 
 	observed_loss = loss_func(constructed_dgm1,construct_dgm2,p,q)
-
+	L = []
 	for i in range(0,repetitions) :
 		shuffled_labels = rand_labelling(skeletons)
 		shuffled_dgms = construct_labels(rand_labelling(skeletons),skeletons)
-		#print(shuffled_labels)
 		#ensure shuffle is a new labelling to observed labelling
 		while check_valid(observed_labelling,shuffled_labels) :
 			#print("same")
 			shuffled_labels = rand_labelling(skeletons)
 			shuffled_dgms = construct_labels(shuffled_labels,skeletons)
-			#print(shuffled_labels)
 
 		loss = loss_func(shuffled_dgms[0], shuffled_dgms[1],p,q)
+		L.append(loss)
 		if loss <= observed_loss :
 			Z += 1
-	return Z/repetitions
+	Z_2 = np.sum(list(filter(lambda p : p < observed_loss,L)))/repetitions
+	return (Z/repetitions)
 
 def p_value(skeletons,dim,observed_labelling,repetitions,loss_func,p,q) :
 	Z = unbiased_estimator(skeletons,dim,observed_labelling,repetitions,loss_func,p,q)
@@ -120,15 +113,25 @@ def p_value(skeletons,dim,observed_labelling,repetitions,loss_func,p,q) :
 #Persistence Landscape Hypothesis Testing
 
 #functional 
-def function(k,b,landscapes,K) :
-	B = np.max([np.max(a) for a in landscapes])
+def function(k,b,B,K) :
 	if k <= K and (b >= -B and b <= B) :
 		return 1
 	return 0
 
-
+#ladscapes is a list of values
 def landscape_random_variable(landscapes,f,K) :
+	functional_val = []
+	for i in landscapes :
+		B = np.max([j[1] for j in i])
+		f_vals = [f(j[0],j[1],B,K) for j in i]
+		mod_landscape_norm = np.linalg.norm(np.multiply(f_vals,[a[2] for a in i]),1)
+		functional_val.append(mod_landscape_norm)
+	return functional_val
+
+
+"""def landscape_random_variable(landscapes,f,K) :
 	#take the wasserstein distance between f*landscapes_pts and [[0,0],...,[0,0]]
+	mean_land = Methods.mean_persistence(landscapes)
 	zero_dgm = [[0,0] for a in range(0,len(landscapes[0][0]))]
 	ks = [a for a in range(0,len(landscapes[0][0]),1)]
 
@@ -140,9 +143,9 @@ def landscape_random_variable(landscapes,f,K) :
 	f_vals = [f(k,b,landscapes,K) for b,k in zip(bs,ks)]
 
 	#apply f_vals to every landscape 
-	modified_land = [np.multiply(f_vals,i[0]) for i in landscapes]
+	modified_land = [np.multiply(f_vals,i) for i in mean_land]
 	#print(modified_land)
-	#rewrite f\Gamma as [[x1,y1],[x2,y2],...,[xn,yn]] 
+	#rewrite fGamma as [[x1,y1],[x2,y2],...,[xn,yn]] 
 	#where x are values in range [0,....,len(landscape[i]))]
 	#and y are our modified_land values
 	modified_pts = []
@@ -155,7 +158,7 @@ def landscape_random_variable(landscapes,f,K) :
 	
 	#return list of distances that is the norm of all possible values for the random variable
 	#return [wasserstein_distance(np.array(zero_dgm),np.array(j),order=1) for j in modified_pts]
-	return [np.linalg.norm(np.array(j),ord=1) for j in modified_land]
+	return [np.linalg.norm(np.array(j),ord=1) for j in modified_land]"""
 
 
 def two_test(landscapes,labelling,crit_val) :
@@ -163,56 +166,46 @@ def two_test(landscapes,labelling,crit_val) :
 
 	data1 = landscape_random_variable(landscape_labelling[0],function,3)
 	data2 = landscape_random_variable(landscape_labelling[1],function,3)
+
+	#as random variables satisy central limit theorem then variables satisfy clt
+
 	stat, p = ttest_ind(data1, data2)
 	#print('stat=%.3f, p=%.3f' % (stat, p))
-	if p > crit_val or p < (1-crit_val) :
+	if p > crit_val  :
+		#print(p)
 		print('Probably the same distribution')
 	else:
+		#print(p)
 		print('Probably different distributions')
 	return p
 
 def two_test_trad(distributions,labelling,crit_val) :
-	data1,data2 = construct_labels(labelling,distributions)
+	print(distributions)
+	data1 = [distributions[i] for i in labelling[0]]
+	data2 = [distributions[i] for i in labelling[1]]
+	print("data1: ",len(data1))
+	print("data2: ",len(data2))
 
 	stat, p = ttest_ind(data1, data2)
-	#print('stat=%.3f, p=%.3f' % (stat, p))
+	print(p)
 	if p > crit_val :
 		print('Probably the same distribution')
 	else:
 		print('Probably different distributions')
 	return p
 
-for i in range(1,11) :
-	print("TEST ", i)
-	distribution = Methods.generate_norm_distributions(4,4,100,Methods.generate_rand_tori)
+#V must be of shape (m^2)
+def create_vectors(pers_images) :
+	coords = [list(zip(x,y)) for x,y in zip(pers_images[0],pers_images[1])]
 
-	rips_complexes = Methods.Rips_complexes(distribution,10)
-	alpha_complex = Methods.Alpha_complexes(distribution)
-	zero_skeletons = Methods.skeletons(rips_complexes,1)
-	zero_persistences = Methods.persistences(zero_skeletons)
-	one_skeletons = Methods.skeletons(rips_complexes,2)
-	one_persistences = Methods.persistences(one_skeletons)
-	landscapes = Methods.persistence_landscapes(one_skeletons,1,3)
+	#coords has shape of ((m^2/2,m^2/2),n)
+	return coords[0]
 
-	p_val_land = two_test(landscapes,[[0,2],[1,3]],0.05)
-
-	p_val_dgm = unbiased_estimator(one_skeletons,1,[[0,2],[1,3]],100,joint_loss,1,2)
-	print('landscape: ',p_val_land)
-	print('diagrams: ',p_val_dgm)
-
-	print("land + dgm: ", p_val_dgm+p_val_land)
-	print("difference: ", np.absolute(p_val_dgm - p_val_land))
-
-"""
-each persistence image has the form 
-np.flip(np.reshape(i[0], [res,res]), 0) - is a resolution x resolution matrix
-"""
-
-#zero_images = Methods.persistence_images(alpha_complex,2,10,0.3)
-
-
-def transform_dgm(diagram_pts) :
-	pass
+def percentile(T,threshold) :
+	vals_below = int((threshold*len(T))/100)
+	print(vals_below)
+	print(T[vals_below])
+	return T[vals_below]
 
 #Persistence Images Hypothesis Testing
 # n - number of distributions
@@ -220,36 +213,133 @@ def transform_dgm(diagram_pts) :
 def images_hypothesis_test(images, label, threshold) :
 	n = len(images)
 	m = int(np.sqrt(len(images[0][0])))
-	print(n)
-	print(m)
+
 	V = np.zeros((np.power(m,2)))
 	#populate V to 2d vectors of points on vectorised dgm
-	#V =
+	V = create_vectors(images)
+	print("length of V", len(V))
 	#filt
-	V = filter(lambda x : x[0] >= x[1],V)
+	V = list(filter(lambda x : x[0] >= x[1],V))
 	#populate loc_v with all 
 
-	m_num = (m*(m+1))/2
-	T = np.zeros((m_num))
+	T = np.zeros((len(V)))
+
 	#filtering stage
-	for i in range (0,m_num) :
-		T[i] = np.mean(V(i))
+	print('length of V: ',len(V))
+	for i in range (0,len(V)) :
+		T[i] = (V[i][0] + V[i][1])/2
+	c_percentile = percentile(T,threshold)
+	V = list(filter(lambda x: x>c_percentile ,V))
 
-	c_percentile = np.percentile(T,threshold)
-	V = filter(lambda x: x>c_percentile ,loc_V)
-
-	Z = np.zeros((n))
+	Z = np.zeros(n)
 
 	#testing
-	for j in range(1,n) :
-		v_1 = V[0][j]
-		v_2 = V[1][j]
+	for j in range(1,len(V)) :
+		j_label1 = label[0][j%len(label[0])]
+		j_label2 = label[1][j%len(label[1])] 
+		v_1 = V[j_label1]
+		v_2 = V[j_label2]
 		#conduct hypothesis test
-		Z[j]
+		stat,Z[j] = ttest_ind(v_1, v_2)
+	#need to do multiple testing adj.
+	return multipletests(Z)[1]
 
-#images_hypothesis_test(alpha_complex,labelling,10)
+
+#---TESTING---
+def construct_tori() :
+	tori = []
+	for i in range(0,20) :
+		theta = np.linspace(0, 2.*np.pi, 100)
+		phi = np.linspace(0, 2.*np.pi, 100)
+
+		x,y,z = (np.cos(theta))*np.cos(phi), (np.cos(theta))*np.sin(phi), np.sin(theta) 
+		tor = np.array([[h,v,w] for h,v,w in zip(x,y,z)])
+		#X = np.random.normal(loc=1,scale=0.5,size=(100,3))
+		n_tor = tor #+ X
+		tori.append(n_tor)
+	return tori
+
+def construct_spheres() :
+	spheres = []
+	for i in range(0,20) :
+		theta = np.linspace(0, 2.*np.pi, 100)
+		phi = np.linspace(0, 2.*np.pi, 100)
+
+		x,y,z = (np.cos(theta))*np.sin(phi), (np.sin(theta))*np.sin(phi), np.cos(theta) 
+		sphr = np.array([[h,v,w] for h,v,w in zip(x,y,z)])
+		X = np.random.normal(loc=1,scale=0.5,size=(100,3))
+		n_sphr = sphr + X
+		spheres.append(n_sphr)
+	return spheres 
 
 
+def test(i) :
+	#construct sample spaces
+	distributions_tori = construct_tori()
+	distribution_sphere = construct_spheres()
+	distributions = distribution_sphere + distributions_tori
+
+	#build diagrams on 0th and 1st
+	cmplex = Methods.Rips_complexes(distributions,10)
+	cmplex_alpha = Methods.Alpha_complexes(distributions)
+
+	zero_skeletons = Methods.skeletons(cmplex,0)
+	one_skeletons = Methods.skeletons(cmplex,1)
+	two_skeletons = Methods.skeletons(cmplex,2)
+
+	zero_persistences = Methods.persistences(zero_skeletons)
+	one_persistences = Methods.persistences(one_skeletons)
+	two_persistences = Methods.persistences(two_skeletons)
+
+	#build landscapes and images 
+	landscapes_zero = Methods.persistence_landscapes(zero_skeletons,0,3)
+	landscapes_one = Methods.persistence_landscapes(one_skeletons,1,3)
+	landscapes_two = Methods.persistence_landscapes(two_skeletons,2,3)
+
+	images_zero = Methods.persistence_images(cmplex_alpha,0,10,0.3)
+	images_one = Methods.persistence_images(cmplex_alpha,1,10,0.3)
+	images_two = Methods.persistence_images(cmplex_alpha,2,10,0.3)
+
+
+	#const vars - crit value and initial labelling 
+	labelling = [[0,2,3,5,7,9,10,11,12,15],[1,4,6,8,13,14,16,17,18,19]]
+	crit_val = 0.05
+	threshold = 10
+
+
+	
+	p_val_dg_0 = unbiased_estimator(zero_skeletons,0,labelling,100,joint_loss,1,2)
+	p_val_dg_1 = unbiased_estimator(one_skeletons,1,labelling,100,joint_loss,1,2)
+	p_val_dg_2 = unbiased_estimator(two_skeletons,2,labelling,100,joint_loss,1,2)
+
+	p_val_land_0 = two_test(landscapes_zero,labelling, crit_val)
+	p_val_land_1 = two_test(landscapes_one,labelling, crit_val)
+	p_val_land_2 = two_test(landscapes_two,labelling, crit_val)
+	
+
+	p_val_img_0 = images_hypothesis_test(images_zero,labelling,threshold)
+	p_val_img_1 = images_hypothesis_test(images_one,labelling,threshold)
+	p_val_img_2 = images_hypothesis_test(images_two,labelling,threshold)
+
+	print("TEST ", i)
+
+		
+	print("P value 0 degree diagam: ", p_val_dg_0)
+	print("P value 1 degree diagam: ", p_val_dg_1)
+	print("P value 2 degree diagam: ", p_val_dg_2)
+
+	print("P value 0 degree landscape: ", p_val_land_0)
+	print("P value 1 degree landscape: ", p_val_land_1)
+	print("P value 2 degree landscape: ", p_val_land_2)
+	
+
+	print("P value 0 degree images: ", p_val_img_0)
+	print("P value 1 degree images: ", p_val_img_1)
+	print("P value 2 degree images: ", p_val_img_2)
+
+
+for i in range(1,6) :
+	test(i)
 
 
 
